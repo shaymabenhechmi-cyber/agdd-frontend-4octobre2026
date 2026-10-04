@@ -1,0 +1,201 @@
+﻿
+
+==================== FILE: C:\Users\LENOVO\Desktop\ICDTP SHAYMA GERMANY\agdd-frontend-angular-updated-2\agdd\frontend\src\app\shared\layout\main-layout\main-layout.component.ts ====================
+
+import { Component, OnInit, inject } from '@angular/core';
+import { RouterOutlet } from '@angular/router';
+import { SidebarComponent } from '../sidebar/sidebar.component';
+import { NavbarComponent } from '../navbar/navbar.component';
+import { DashboardService } from '../../../core/services/dashboard.service';
+
+@Component({
+  selector: 'app-main-layout',
+  standalone: true,
+  imports: [RouterOutlet, SidebarComponent, NavbarComponent],
+  templateUrl: './main-layout.component.html',
+  styleUrl: './main-layout.component.scss'
+})
+export class MainLayoutComponent implements OnInit {
+  private dashboardService = inject(DashboardService);
+
+  ngOnInit(): void {
+    // Pre-load dashboard data app-wide so the navbar alerts bell has data
+    // even before the user visits the Dashboard page itself.
+    this.dashboardService.fetchOverview().subscribe();
+  }
+}
+
+
+
+==================== FILE: C:\Users\LENOVO\Desktop\ICDTP SHAYMA GERMANY\agdd-frontend-angular-updated-2\agdd\frontend\src\app\shared\layout\navbar\navbar.component.ts ====================
+
+import { CommonModule } from '@angular/common';
+
+import {
+  Component,
+  OnInit,
+  inject,
+  signal
+} from '@angular/core';
+
+import {
+  MatBadgeModule
+} from '@angular/material/badge';
+
+import {
+  MatButtonModule
+} from '@angular/material/button';
+
+import {
+  MatIconModule
+} from '@angular/material/icon';
+
+import {
+  MatMenuModule
+} from '@angular/material/menu';
+
+import {
+  MatToolbarModule
+} from '@angular/material/toolbar';
+
+import {
+  MatTooltipModule
+} from '@angular/material/tooltip';
+
+import {
+  Router,
+  RouterLink
+} from '@angular/router';
+
+import {
+  AuthService
+} from '../../../core/services/auth.service';
+
+import {
+  ThemeService
+} from '../../../core/services/theme.service';
+
+
+export interface AlertItem {
+
+  message: string;
+
+  level?:
+    | 'INFO'
+    | 'WARNING'
+    | 'CRITICAL';
+
+  time: string;
+}
+
+
+@Component({
+
+  selector: 'app-navbar',
+
+  standalone: true,
+
+  imports: [
+
+    CommonModule,
+
+    RouterLink,
+
+    MatToolbarModule,
+
+    MatIconModule,
+
+    MatButtonModule,
+
+    MatMenuModule,
+
+    MatBadgeModule,
+
+    MatTooltipModule
+
+  ],
+
+  templateUrl:
+    './navbar.component.html',
+
+  styleUrl:
+    './navbar.component.scss'
+
+})
+export class NavbarComponent
+  implements OnInit {
+
+
+  private readonly authService =
+    inject(AuthService);
+
+
+  private readonly router =
+    inject(Router);
+
+
+  /**
+   * KEEP THIS EXACTLY.
+   * Dark mode is not changed.
+   */
+  readonly themeService =
+    inject(ThemeService);
+
+
+  /**
+   * Reactive current user.
+   *
+   * When AuthService.currentUser changes,
+   * navbar automatically updates.
+   */
+  readonly currentUser =
+    this.authService.currentUser;
+
+
+  readonly activeAlerts =
+    signal<AlertItem[]>([]);
+
+
+  ngOnInit(): void {}
+
+
+  /**
+   * Generate user initials.
+   */
+  initials(): string {
+
+    const user =
+      this.currentUser();
+
+    if (!user) {
+      return '';
+    }
+
+    return `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`
+      .toUpperCase();
+  }
+
+
+  /**
+   * KEEP DARK MODE EXACTLY AS IT IS.
+   */
+  toggleTheme(): void {
+
+    this.themeService.toggle();
+
+  }
+
+
+  /**
+   * Logout.
+   */
+  logout(): void {
+
+    this.authService.logout();
+
+    this.router.navigate([
+      '/login'
+    ]);
+
+  }
+}

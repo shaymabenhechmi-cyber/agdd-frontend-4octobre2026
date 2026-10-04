@@ -1,0 +1,2084 @@
+﻿
+
+==================== FILE: C:\Users\LENOVO\Desktop\ICDTP SHAYMA GERMANY\agdd-frontend-angular-updated-2\agdd\frontend\src\app\core\guards\auth.guard.ts ====================
+
+import { inject } from '@angular/core';
+import { CanActivateFn, Router } from '@angular/router';
+import { AuthService } from '../services/auth.service';
+
+/**
+ * Prevents unauthenticated users from accessing protected routes.
+ * Redirects to /login if no valid token is present.
+ */
+export const authGuard: CanActivateFn = () => {
+  const authService = inject(AuthService);
+  const router = inject(Router);
+
+  if (authService.isAuthenticated()) {
+    return true;
+  }
+
+  router.navigate(['/login']);
+  return false;
+};
+
+
+
+==================== FILE: C:\Users\LENOVO\Desktop\ICDTP SHAYMA GERMANY\agdd-frontend-angular-updated-2\agdd\frontend\src\app\core\models\auth.model.ts ====================
+
+export interface LoginRequest {
+  username: string;
+  password: string;
+}
+
+export interface RegisterRequest {
+  firstName: string;
+  lastName: string;
+  username: string;
+  email: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  token: string;
+  type: string;
+  id: number;
+  username: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  role: string;
+}
+
+
+
+==================== FILE: C:\Users\LENOVO\Desktop\ICDTP SHAYMA GERMANY\agdd-frontend-angular-updated-2\agdd\frontend\src\app\core\models\settings.model.ts ====================
+
+export interface SettingsPayload<T = Record<string, any>> {
+  category: string;
+  values: T;
+}
+
+
+export interface CameraSettings {
+
+  activeCamera: 'top' | 'side';
+
+  topZoom: number;
+  topFrameWidth: number;
+  topFrameHeight: number;
+
+  sideZoom: number;
+  sideFrameWidth: number;
+  sideFrameHeight: number;
+
+  brightness: number;
+  contrast: number;
+  exposure: number;
+
+  resolution: string;
+  frameRate: number;
+  autoWhiteBalance: boolean;
+}
+
+
+export interface RobotSettings {
+
+  armSpeed: number;
+  gripForce: number;
+  safetyZoneRadius: number;
+
+  sortingMode:
+    | 'defectType'
+    | 'size';
+
+  autoReturnHome: boolean;
+}
+
+
+export interface AiSettings {
+
+  confidenceThreshold: number;
+  model: string;
+  autoRetrain: boolean;
+  rejectRateAlertThreshold: number;
+}
+
+
+export interface SystemSettings {
+
+ 
+  theme:
+    | 'dark'
+    | 'light'
+    | 'system';
+
+  sessionTimeoutMinutes: number;
+
+  emailAlerts: boolean;
+
+  pushAlerts: boolean;
+
+  soundNotifications: boolean;
+
+  dashboardAutoRefresh: boolean;
+
+  dashboardRefreshInterval: number;
+
+  confirmRobotActions: boolean;
+}
+
+
+==================== FILE: C:\Users\LENOVO\Desktop\ICDTP SHAYMA GERMANY\agdd-frontend-angular-updated-2\agdd\frontend\src\app\core\models\user.model.ts ====================
+
+export interface User {
+  id: number;
+  firstName: string;
+  lastName: string;
+  username: string;
+  email: string;
+  enabled: boolean;
+  role: string; // ADMIN | OPERATOR | VISITOR
+}
+
+export interface UserCreatePayload {
+  firstName: string;
+  lastName: string;
+  username: string;
+  email: string;
+  password: string;
+  enabled: boolean;
+  role: string;
+}
+
+export interface UserUpdatePayload {
+  firstName: string;
+  lastName: string;
+  username: string;
+  email: string;
+  password?: string;
+  enabled: boolean;
+  role: string;
+}
+
+
+
+==================== FILE: C:\Users\LENOVO\Desktop\ICDTP SHAYMA GERMANY\agdd-frontend-angular-updated-2\agdd\frontend\src\app\core\services\auth.service.ts ====================
+
+import { Injectable, signal, computed } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Router } from '@angular/router';
+import { Observable, tap } from 'rxjs';
+
+import {
+  LoginRequest,
+  LoginResponse,
+  RegisterRequest
+} from '../models/auth.model';
+
+import { environment } from '../../../environments/environment';
+
+const TOKEN_KEY = 'agdd_token';
+const USER_KEY = 'agdd_user';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class AuthService {
+
+  private readonly apiUrl = `${environment.apiUrl}/auth`;
+
+  /**
+   * Current authenticated user.
+   *
+   * This signal is used by the navbar and other components.
+   */
+  readonly currentUser = signal<LoginResponse | null>(
+    this.readStoredUser()
+  );
+
+  /**
+   * True when a user is currently authenticated.
+   */
+  readonly isLoggedIn = computed(
+    () => !!this.currentUser()
+  );
+
+  constructor(
+    private readonly http: HttpClient,
+    private readonly router: Router
+  ) {}
+
+  /**
+   * Login
+   */
+  login(
+    credentials: LoginRequest
+  ): Observable<LoginResponse> {
+
+    return this.http
+      .post<LoginResponse>(
+        `${this.apiUrl}/login`,
+        credentials
+      )
+      .pipe(
+
+        tap((response) => {
+
+          localStorage.setItem(
+            TOKEN_KEY,
+            response.token
+          );
+
+          localStorage.setItem(
+            USER_KEY,
+            JSON.stringify(response)
+          );
+
+          this.currentUser.set(response);
+        })
+
+      );
+  }
+
+  /**
+   * Register
+   */
+  register(
+    data: RegisterRequest
+  ): Observable<LoginResponse> {
+
+    return this.http
+      .post<LoginResponse>(
+        `${this.apiUrl}/register`,
+        data
+      )
+      .pipe(
+
+        tap((response) => {
+
+          localStorage.setItem(
+            TOKEN_KEY,
+            response.token
+          );
+
+          localStorage.setItem(
+            USER_KEY,
+            JSON.stringify(response)
+          );
+
+          this.currentUser.set(response);
+        })
+
+      );
+  }
+
+  /**
+   * Update the currently logged-in user
+   * without requiring logout/login.
+   *
+   * Used after editing the profile.
+   */
+  updateCurrentUser(
+    data: Partial<LoginResponse>
+  ): void {
+
+    const current = this.currentUser();
+
+    if (!current) {
+      return;
+    }
+
+    const updatedUser: LoginResponse = {
+      ...current,
+      ...data
+    };
+
+    localStorage.setItem(
+      USER_KEY,
+      JSON.stringify(updatedUser)
+    );
+
+    this.currentUser.set(updatedUser);
+  }
+
+  /**
+   * Logout
+   */
+  logout(): void {
+
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+
+    this.currentUser.set(null);
+
+    this.router.navigate(['/login']);
+  }
+
+  /**
+   * Return JWT token.
+   */
+  getToken(): string | null {
+    return localStorage.getItem(TOKEN_KEY);
+  }
+
+  /**
+   * Check authentication.
+   */
+  isAuthenticated(): boolean {
+    return !!this.getToken();
+  }
+
+  /**
+   * Read the user saved in localStorage.
+   */
+  private readStoredUser(): LoginResponse | null {
+
+    const raw = localStorage.getItem(USER_KEY);
+
+    if (!raw) {
+      return null;
+    }
+
+    try {
+
+      return JSON.parse(raw) as LoginResponse;
+
+    } catch {
+
+      localStorage.removeItem(USER_KEY);
+
+      return null;
+    }
+  }
+}
+
+
+==================== FILE: C:\Users\LENOVO\Desktop\ICDTP SHAYMA GERMANY\agdd-frontend-angular-updated-2\agdd\frontend\src\app\core\services\settings.service.ts ====================
+
+import { Injectable, inject } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Observable } from 'rxjs';
+
+import {
+SettingsPayload
+} from '../models/settings.model';
+
+import {
+environment
+} from '../../../environments/environment';
+
+@Injectable({
+providedIn: 'root'
+})
+export class SettingsService {
+
+private readonly http = inject(HttpClient);
+
+private readonly apiUrl =
+`${environment.apiUrl}/settings`;
+
+// ==========================================
+// GET SETTINGS
+// ==========================================
+
+get<T>(
+category: string
+): Observable<SettingsPayload<T>> {
+
+
+return this.http.get<SettingsPayload<T>>(
+  `${this.apiUrl}/${category}`
+);
+
+
+}
+
+// ==========================================
+// SAVE SETTINGS
+// ==========================================
+
+save<T>(
+category: string,
+values: T
+): Observable<SettingsPayload<T>> {
+
+
+return this.http.put<SettingsPayload<T>>(
+  `${this.apiUrl}/${category}`,
+  values
+);
+
+
+}
+
+}
+
+
+
+==================== FILE: C:\Users\LENOVO\Desktop\ICDTP SHAYMA GERMANY\agdd-frontend-angular-updated-2\agdd\frontend\src\app\core\services\user.service.ts ====================
+
+import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Observable } from 'rxjs';
+import { User, UserCreatePayload, UserUpdatePayload } from '../models/user.model';
+import { environment } from '../../../environments/environment';
+
+@Injectable({ providedIn: 'root' })
+export class UserService {
+  private apiUrl = `${environment.apiUrl}/users`;
+
+  constructor(private http: HttpClient) {}
+
+  getAll(): Observable<User[]> {
+    return this.http.get<User[]>(this.apiUrl);
+  }
+
+  getById(id: number): Observable<User> {
+    return this.http.get<User>(`${this.apiUrl}/${id}`);
+  }
+
+  create(payload: UserCreatePayload): Observable<User> {
+    return this.http.post<User>(this.apiUrl, payload);
+  }
+
+  update(id: number, payload: UserUpdatePayload): Observable<User> {
+    return this.http.put<User>(`${this.apiUrl}/${id}`, payload);
+  }
+
+  delete(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.apiUrl}/${id}`);
+  }
+}
+
+
+
+==================== FILE: C:\Users\LENOVO\Desktop\ICDTP SHAYMA GERMANY\agdd-frontend-angular-updated-2\agdd\frontend\src\app\features\login\login.component.ts ====================
+
+import { Component, signal, inject } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { Router, RouterLink } from '@angular/router';
+
+import { MatCardModule } from '@angular/material/card';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+
+import { AuthService } from '../../core/services/auth.service';
+
+@Component({
+  selector: 'app-login',
+  standalone: true,
+  imports: [
+    CommonModule, ReactiveFormsModule, RouterLink,
+    MatCardModule, MatFormFieldModule, MatInputModule,
+    MatButtonModule, MatIconModule, MatProgressSpinnerModule
+  ],
+  templateUrl: './login.component.html',
+  styleUrl: './login.component.scss'
+})
+export class LoginComponent {
+  private fb = inject(FormBuilder);
+  private authService = inject(AuthService);
+  private router = inject(Router);
+
+  hidePassword = signal(true);
+  loading = signal(false);
+  errorMessage = signal<string | null>(null);
+
+  form = this.fb.group({
+    username: ['', Validators.required],
+    password: ['', Validators.required],
+  });
+
+  togglePassword(): void {
+    this.hidePassword.update((v) => !v);
+  }
+
+  onSubmit(): void {
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    this.loading.set(true);
+    this.errorMessage.set(null);
+
+    this.authService.login(this.form.getRawValue() as { username: string; password: string }).subscribe({
+      next: () => {
+        this.loading.set(false);
+        this.router.navigate(['/dashboard']);
+      },
+      error: () => {
+        this.loading.set(false);
+        this.errorMessage.set('Invalid credentials. Please try again.');
+      }
+    });
+  }
+}
+
+
+
+==================== FILE: C:\Users\LENOVO\Desktop\ICDTP SHAYMA GERMANY\agdd-frontend-angular-updated-2\agdd\frontend\src\app\features\profile\profile-settings.component.ts ====================
+
+import {
+  CommonModule
+} from '@angular/common';
+
+import {
+  Component,
+  OnDestroy,
+  OnInit,
+  inject,
+  signal
+} from '@angular/core';
+
+import {
+  ReactiveFormsModule,
+  FormBuilder,
+  Validators,
+  AbstractControl,
+  ValidationErrors
+} from '@angular/forms';
+
+import {
+  MatButtonModule
+} from '@angular/material/button';
+
+import {
+  MatCardModule
+} from '@angular/material/card';
+
+import {
+  MatFormFieldModule
+} from '@angular/material/form-field';
+
+import {
+  MatIconModule
+} from '@angular/material/icon';
+
+import {
+  MatInputModule
+} from '@angular/material/input';
+
+import {
+  MatProgressSpinnerModule
+} from '@angular/material/progress-spinner';
+
+import {
+  MatSnackBar
+} from '@angular/material/snack-bar';
+
+import {
+  MatTabsModule
+} from '@angular/material/tabs';
+
+import {
+  ActivatedRoute
+} from '@angular/router';
+
+import {
+  Subscription
+} from 'rxjs';
+
+import {
+  ProfileService,
+  UserProfile
+} from './profile.service';
+
+import {
+  AuthService
+} from '../../core/services/auth.service';
+
+
+/**
+ * Validator used to make sure that
+ * new password and confirmation are identical.
+ */
+function passwordsMatchValidator(
+  control: AbstractControl
+): ValidationErrors | null {
+
+  const newPassword =
+    control.get('newPassword')?.value;
+
+  const confirmPassword =
+    control.get('confirmPassword')?.value;
+
+  if (
+    !newPassword ||
+    !confirmPassword
+  ) {
+    return null;
+  }
+
+  return newPassword === confirmPassword
+    ? null
+    : { passwordsMismatch: true };
+}
+
+
+@Component({
+  selector: 'app-profile-settings',
+  standalone: true,
+
+  imports: [
+
+    CommonModule,
+
+    ReactiveFormsModule,
+
+    MatCardModule,
+
+    MatTabsModule,
+
+    MatFormFieldModule,
+
+    MatInputModule,
+
+    MatButtonModule,
+
+    MatIconModule,
+
+    MatProgressSpinnerModule
+
+  ],
+
+  templateUrl: './profile-settings.component.html',
+
+  styleUrl: './profile-settings.component.scss'
+})
+export class ProfileSettingsComponent
+  implements OnInit, OnDestroy {
+
+
+  private readonly fb =
+    inject(FormBuilder);
+
+  private readonly profileService =
+    inject(ProfileService);
+
+  private readonly authService =
+    inject(AuthService);
+
+  private readonly snackBar =
+    inject(MatSnackBar);
+
+  private readonly route =
+    inject(ActivatedRoute);
+
+
+  /**
+   * Controls the active Material tab.
+   *
+   * 0 = Personal info
+   * 1 = Security
+   */
+  readonly selectedTabIndex =
+    signal(0);
+
+
+  readonly loadingProfile =
+    signal(true);
+
+
+  readonly savingInfo =
+    signal(false);
+
+
+  readonly savingPassword =
+    signal(false);
+
+
+  readonly profile =
+    signal<UserProfile | null>(null);
+
+
+  private queryParamSubscription?: Subscription;
+
+
+  /**
+   * Personal information form.
+   */
+  readonly infoForm =
+    this.fb.nonNullable.group({
+
+      firstName: [
+        '',
+        [
+          Validators.required,
+          Validators.maxLength(60)
+        ]
+      ],
+
+      lastName: [
+        '',
+        [
+          Validators.required,
+          Validators.maxLength(60)
+        ]
+      ],
+
+      email: [
+        '',
+        [
+          Validators.required,
+          Validators.email
+        ]
+      ]
+
+    });
+
+
+  /**
+   * Security / password form.
+   */
+  readonly passwordForm =
+    this.fb.nonNullable.group(
+
+      {
+
+        currentPassword: [
+          '',
+          [
+            Validators.required
+          ]
+        ],
+
+        newPassword: [
+          '',
+          [
+            Validators.required,
+            Validators.minLength(8)
+          ]
+        ],
+
+        confirmPassword: [
+          '',
+          [
+            Validators.required
+          ]
+        ]
+
+      },
+
+      {
+        validators:
+          passwordsMatchValidator
+      }
+
+    );
+
+
+  ngOnInit(): void {
+
+    /**
+     * Listen continuously to query parameters.
+     *
+     * This is important because Angular can reuse
+     * the same ProfileSettingsComponent when only
+     * ?tab=security changes.
+     */
+    this.queryParamSubscription =
+      this.route.queryParamMap.subscribe(
+        (params) => {
+
+          const tab =
+            params.get('tab');
+
+          this.selectedTabIndex.set(
+            tab === 'security'
+              ? 1
+              : 0
+          );
+
+        }
+      );
+
+
+    /**
+     * Load current profile from backend.
+     */
+    this.loadProfile();
+  }
+
+
+  /**
+   * Load the authenticated user's profile.
+   */
+  private loadProfile(): void {
+
+    this.loadingProfile.set(true);
+
+    this.profileService
+      .getCurrentProfile()
+      .subscribe({
+
+        next: (user) => {
+
+          this.profile.set(user);
+
+          this.infoForm.patchValue({
+
+            firstName:
+              user.firstName,
+
+            lastName:
+              user.lastName,
+
+            email:
+              user.email
+
+          });
+
+          this.loadingProfile.set(false);
+        },
+
+
+        error: () => {
+
+          this.loadingProfile.set(false);
+
+          this.snackBar.open(
+            'Unable to load your profile. Please try again.',
+            'Close',
+            {
+              duration: 4000
+            }
+          );
+
+        }
+
+      });
+  }
+
+
+  /**
+   * User initials displayed in the profile header.
+   */
+  get initials(): string {
+
+    const user =
+      this.profile();
+
+    if (!user) {
+      return '';
+    }
+
+    return `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`
+      .toUpperCase();
+  }
+
+
+  /**
+   * Save personal information.
+   */
+  saveInfo(): void {
+
+    if (this.infoForm.invalid) {
+
+      this.infoForm.markAllAsTouched();
+
+      return;
+    }
+
+
+    this.savingInfo.set(true);
+
+
+    const payload =
+      this.infoForm.getRawValue();
+
+
+    this.profileService
+      .updateProfile(payload)
+      .subscribe({
+
+        next: (updated) => {
+
+          /**
+           * Update local profile page.
+           */
+          this.profile.set(updated);
+
+
+          /**
+           * IMPORTANT:
+           *
+           * Update AuthService.currentUser()
+           * so the navbar changes immediately.
+           */
+          this.authService.updateCurrentUser({
+
+            firstName:
+              updated.firstName,
+
+            lastName:
+              updated.lastName,
+
+            email:
+              updated.email,
+
+            role:
+              updated.role
+
+          });
+
+
+          this.savingInfo.set(false);
+
+
+          this.snackBar.open(
+            'Profile updated successfully.',
+            'Close',
+            {
+              duration: 3000
+            }
+          );
+
+        },
+
+
+        error: (error) => {
+
+          console.error(
+            'Profile update error:',
+            error
+          );
+
+
+          this.savingInfo.set(false);
+
+
+          this.snackBar.open(
+            'Could not update your profile. Please try again.',
+            'Close',
+            {
+              duration: 4000
+            }
+          );
+
+        }
+
+      });
+  }
+
+
+  /**
+   * Change password.
+   */
+  changePassword(): void {
+
+    if (this.passwordForm.invalid) {
+
+      this.passwordForm.markAllAsTouched();
+
+      return;
+    }
+
+
+    this.savingPassword.set(true);
+
+
+    const {
+      currentPassword,
+      newPassword
+    } =
+      this.passwordForm.getRawValue();
+
+
+    this.profileService
+      .changePassword({
+
+        currentPassword,
+
+        newPassword
+
+      })
+      .subscribe({
+
+        next: () => {
+
+          this.savingPassword.set(false);
+
+
+          /**
+           * Clear password fields after success.
+           */
+          this.passwordForm.reset();
+
+
+          this.snackBar.open(
+            'Password changed successfully.',
+            'Close',
+            {
+              duration: 3000
+            }
+          );
+
+        },
+
+
+        error: (error) => {
+
+          console.error(
+            'Password change error:',
+            error
+          );
+
+
+          this.savingPassword.set(false);
+
+
+          this.snackBar.open(
+            'Could not change your password. Check your current password and try again.',
+            'Close',
+            {
+              duration: 5000
+            }
+          );
+
+        }
+
+      });
+  }
+
+
+  /**
+   * Cleanup query-param subscription.
+   */
+  ngOnDestroy(): void {
+
+    this.queryParamSubscription?.unsubscribe();
+
+  }
+}
+
+
+==================== FILE: C:\Users\LENOVO\Desktop\ICDTP SHAYMA GERMANY\agdd-frontend-angular-updated-2\agdd\frontend\src\app\features\settings\ai-settings\ai-settings.component.ts ====================
+
+import { Component, OnInit, inject, signal } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { RouterModule } from '@angular/router';
+import { FormsModule } from '@angular/forms';
+import { MatIconModule } from '@angular/material/icon';
+import { MatButtonModule } from '@angular/material/button';
+import { MatSliderModule } from '@angular/material/slider';
+import { MatSelectModule } from '@angular/material/select';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+
+import { SettingsService } from '../../../core/services/settings.service';
+import { AiSettings } from '../../../core/models/settings.model';
+
+const DEFAULTS: AiSettings = {
+  confidenceThreshold: 75,
+  model: 'yolov8n',
+  autoRetrain: false,
+  rejectRateAlertThreshold: 8,
+};
+
+@Component({
+  selector: 'app-ai-settings',
+  standalone: true,
+  imports: [
+    CommonModule, RouterModule, FormsModule, MatIconModule, MatButtonModule,
+    MatSliderModule, MatSelectModule, MatSlideToggleModule, MatSnackBarModule
+  ],
+  templateUrl: './ai-settings.component.html',
+  styleUrl: '../settings-detail.scss'
+})
+export class AiSettingsComponent implements OnInit {
+  private settingsService = inject(SettingsService);
+  private snackBar = inject(MatSnackBar);
+
+  loading = signal(true);
+  saving = signal(false);
+  settings = signal<AiSettings>({ ...DEFAULTS });
+
+  models = [
+    { value: 'yolov8n', label: 'YOLOv8n (fastest, lower accuracy)' },
+    { value: 'yolov8s', label: 'YOLOv8s (balanced)' },
+    { value: 'yolov8m', label: 'YOLOv8m (most accurate, slower)' },
+    { value: 'custom', label: 'Custom trained model' },
+  ];
+
+  ngOnInit(): void {
+    this.settingsService.get<AiSettings>('ai').subscribe({
+      next: (payload) => {
+        this.settings.set({ ...DEFAULTS, ...payload.values });
+        this.loading.set(false);
+      },
+      error: () => this.loading.set(false)
+    });
+  }
+
+  update<K extends keyof AiSettings>(key: K, value: AiSettings[K]): void {
+    this.settings.update(s => ({ ...s, [key]: value }));
+  }
+
+  save(): void {
+    this.saving.set(true);
+    this.settingsService.save('ai', this.settings()).subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.snackBar.open('AI settings saved', 'Close', { duration: 2500 });
+      },
+      error: () => {
+        this.saving.set(false);
+        this.snackBar.open('Error saving settings', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  resetToDefaults(): void {
+    this.settings.set({ ...DEFAULTS });
+  }
+}
+
+
+
+==================== FILE: C:\Users\LENOVO\Desktop\ICDTP SHAYMA GERMANY\agdd-frontend-angular-updated-2\agdd\frontend\src\app\features\settings\camera-settings\camera-settings.component.ts ====================
+
+import {
+  Component,
+  OnInit,
+  inject,
+  signal
+} from '@angular/core';
+
+import { CommonModule } from '@angular/common';
+import { RouterModule } from '@angular/router';
+import { FormsModule } from '@angular/forms';
+
+import { MatIconModule } from '@angular/material/icon';
+import { MatButtonModule } from '@angular/material/button';
+import { MatSliderModule } from '@angular/material/slider';
+import { MatSelectModule } from '@angular/material/select';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
+import {
+  MatSnackBar,
+  MatSnackBarModule
+} from '@angular/material/snack-bar';
+
+import { SettingsService } from '../../../core/services/settings.service';
+import { CameraSettings } from '../../../core/models/settings.model';
+
+
+const DEFAULTS: CameraSettings = {
+
+  activeCamera: 'top',
+
+  // TOP CAMERA
+  topZoom: 100,
+  topFrameWidth: 100,
+  topFrameHeight: 70,
+
+  // SIDE CAMERA
+  sideZoom: 100,
+  sideFrameWidth: 100,
+  sideFrameHeight: 70,
+
+  // IMAGE
+  brightness: 50,
+  contrast: 50,
+  exposure: 50,
+
+  // VIDEO
+  resolution: '1920x1080',
+  frameRate: 30,
+  autoWhiteBalance: true
+
+};
+
+
+@Component({
+  selector: 'app-camera-settings',
+
+  standalone: true,
+
+  imports: [
+    CommonModule,
+    RouterModule,
+    FormsModule,
+
+    MatIconModule,
+    MatButtonModule,
+    MatSliderModule,
+    MatSelectModule,
+    MatSlideToggleModule,
+    MatButtonToggleModule,
+    MatSnackBarModule
+  ],
+
+  templateUrl: './camera-settings.component.html',
+
+  styleUrl: '../settings-detail.scss'
+})
+export class CameraSettingsComponent implements OnInit {
+
+  private settingsService = inject(SettingsService);
+
+  private snackBar = inject(MatSnackBar);
+
+
+  loading = signal(true);
+
+  saving = signal(false);
+
+
+  settings = signal<CameraSettings>({
+    ...DEFAULTS
+  });
+
+
+  resolutions = [
+    '1280x720',
+    '1920x1080',
+    '2560x1440',
+    '3840x2160'
+  ];
+
+
+  ngOnInit(): void {
+
+    this.settingsService
+      .get<CameraSettings>('camera')
+      .subscribe({
+
+        next: (payload) => {
+
+          this.settings.set({
+            ...DEFAULTS,
+            ...payload.values
+          });
+
+          this.loading.set(false);
+
+        },
+
+        error: (error) => {
+
+          console.error(
+            'Error loading camera settings:',
+            error
+          );
+
+          this.settings.set({
+            ...DEFAULTS
+          });
+
+          this.loading.set(false);
+
+          this.snackBar.open(
+            'Unable to load camera settings. Using defaults.',
+            'Close',
+            {
+              duration: 3000
+            }
+          );
+
+        }
+
+      });
+
+  }
+
+
+  update<K extends keyof CameraSettings>(
+    key: K,
+    value: CameraSettings[K]
+  ): void {
+
+    this.settings.update(current => ({
+      ...current,
+      [key]: value
+    }));
+
+  }
+
+
+  save(): void {
+
+    this.saving.set(true);
+
+
+    this.settingsService
+      .save(
+        'camera',
+        this.settings()
+      )
+      .subscribe({
+
+        next: () => {
+
+          this.saving.set(false);
+
+          this.snackBar.open(
+            'Camera settings saved successfully',
+            'Close',
+            {
+              duration: 2500
+            }
+          );
+
+        },
+
+        error: (error) => {
+
+          console.error(
+            'Error saving camera settings:',
+            error
+          );
+
+          this.saving.set(false);
+
+          this.snackBar.open(
+            'Error saving camera settings',
+            'Close',
+            {
+              duration: 3000
+            }
+          );
+
+        }
+
+      });
+
+  }
+
+
+  resetToDefaults(): void {
+
+    this.settings.set({
+      ...DEFAULTS
+    });
+
+    this.snackBar.open(
+      'Camera settings reset to defaults',
+      'Close',
+      {
+        duration: 2000
+      }
+    );
+
+  }
+
+}
+
+
+==================== FILE: C:\Users\LENOVO\Desktop\ICDTP SHAYMA GERMANY\agdd-frontend-angular-updated-2\agdd\frontend\src\app\features\settings\robot-settings\robot-settings.component.ts ====================
+
+import { Component, OnInit, inject, signal } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { RouterModule } from '@angular/router';
+import { FormsModule } from '@angular/forms';
+import { MatIconModule } from '@angular/material/icon';
+import { MatButtonModule } from '@angular/material/button';
+import { MatSliderModule } from '@angular/material/slider';
+import { MatSelectModule } from '@angular/material/select';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+
+import { SettingsService } from '../../../core/services/settings.service';
+import { RobotSettings } from '../../../core/models/settings.model';
+
+const DEFAULTS: RobotSettings = {
+  armSpeed: 60,
+  gripForce: 45,
+  safetyZoneRadius: 80,
+  sortingMode: 'defectType',
+  autoReturnHome: true,
+};
+
+@Component({
+  selector: 'app-robot-settings',
+  standalone: true,
+  imports: [
+    CommonModule, RouterModule, FormsModule, MatIconModule, MatButtonModule,
+    MatSliderModule, MatSelectModule, MatSlideToggleModule, MatSnackBarModule
+  ],
+  templateUrl: './robot-settings.component.html',
+  styleUrl: '../settings-detail.scss'
+})
+export class RobotSettingsComponent implements OnInit {
+  private settingsService = inject(SettingsService);
+  private snackBar = inject(MatSnackBar);
+
+  loading = signal(true);
+  saving = signal(false);
+  settings = signal<RobotSettings>({ ...DEFAULTS });
+
+  ngOnInit(): void {
+    this.settingsService.get<RobotSettings>('robot').subscribe({
+      next: (payload) => {
+        this.settings.set({ ...DEFAULTS, ...payload.values });
+        this.loading.set(false);
+      },
+      error: () => this.loading.set(false)
+    });
+  }
+
+  update<K extends keyof RobotSettings>(key: K, value: RobotSettings[K]): void {
+    this.settings.update(s => ({ ...s, [key]: value }));
+  }
+
+  save(): void {
+    this.saving.set(true);
+    this.settingsService.save('robot', this.settings()).subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.snackBar.open('Robot settings saved', 'Close', { duration: 2500 });
+      },
+      error: () => {
+        this.saving.set(false);
+        this.snackBar.open('Error saving settings', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  resetToDefaults(): void {
+    this.settings.set({ ...DEFAULTS });
+  }
+
+  calibrateHome(): void {
+    this.snackBar.open('Home position calibration started (simulated)', 'Close', { duration: 2500 });
+  }
+}
+
+
+
+==================== FILE: C:\Users\LENOVO\Desktop\ICDTP SHAYMA GERMANY\agdd-frontend-angular-updated-2\agdd\frontend\src\app\features\settings\system-settings\system-settings.component.ts ====================
+
+import {
+  Component,
+  OnInit,
+  inject,
+  signal
+} from '@angular/core';
+
+import { CommonModule } from '@angular/common';
+import { RouterModule } from '@angular/router';
+import { FormsModule } from '@angular/forms';
+
+import { MatIconModule } from '@angular/material/icon';
+import { MatButtonModule } from '@angular/material/button';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { MatSliderModule } from '@angular/material/slider';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatSelectModule } from '@angular/material/select';
+
+import { SettingsService } from '../../../core/services/settings.service';
+import { SystemSettings } from '../../../core/models/settings.model';
+import { ThemeService } from '../../../core/services/theme.service';
+
+
+const DEFAULTS: SystemSettings = {
+  
+
+  theme: 'dark',
+
+  sessionTimeoutMinutes: 30,
+
+  emailAlerts: true,
+  pushAlerts: true,
+  soundNotifications: false,
+
+  dashboardAutoRefresh: true,
+  dashboardRefreshInterval: 3,
+
+  confirmRobotActions: true
+};
+
+
+@Component({
+  selector: 'app-system-settings',
+  standalone: true,
+
+  imports: [
+    CommonModule,
+    RouterModule,
+    FormsModule,
+
+    MatIconModule,
+    MatButtonModule,
+    MatSlideToggleModule,
+    MatSliderModule,
+    MatFormFieldModule,
+    MatSelectModule
+  ],
+
+  templateUrl: './system-settings.component.html',
+  styleUrl: './system-settings.component.scss'
+})
+export class SystemSettingsComponent implements OnInit {
+
+  private readonly settingsService =
+    inject(SettingsService);
+
+  private readonly themeService =
+    inject(ThemeService);
+
+
+  /* ============================================================
+     STATE
+     ============================================================ */
+
+  settings =
+    signal<SystemSettings>({
+      ...DEFAULTS
+    });
+
+  loading =
+    signal<boolean>(true);
+
+  saving =
+    signal<boolean>(false);
+
+  saved =
+    signal<boolean>(false);
+
+  error =
+    signal<string>('');
+
+
+  
+
+
+  /* ============================================================
+     INIT
+     ============================================================ */
+
+  ngOnInit(): void {
+    this.loadSettings();
+  }
+
+
+  /* ============================================================
+     LOAD SETTINGS
+     ============================================================ */
+
+  private loadSettings(): void {
+
+    this.loading.set(true);
+    this.error.set('');
+
+    this.settingsService
+      .get<SystemSettings>('system')
+      .subscribe({
+
+        next: payload => {
+
+          const loadedSettings: SystemSettings = {
+            ...DEFAULTS,
+            ...(payload?.values ?? {})
+          };
+
+          this.settings.set(
+            loadedSettings
+          );
+
+          /*
+           * Apply theme immediately.
+           */
+          this.applyTheme(
+            loadedSettings.theme
+          );
+
+          this.loading.set(false);
+        },
+
+        error: error => {
+
+          console.error(
+            'Failed to load system settings:',
+            error
+          );
+
+          /*
+           * Use defaults if backend
+           * is unavailable.
+           */
+          this.settings.set({
+            ...DEFAULTS
+          });
+
+          this.applyTheme(
+            DEFAULTS.theme
+          );
+
+          this.error.set(
+            'Unable to load saved settings. Default values are being used.'
+          );
+
+          this.loading.set(false);
+        }
+      });
+  }
+
+
+  /* ============================================================
+     UPDATE SETTING
+     ============================================================ */
+
+  update<K extends keyof SystemSettings>(
+    key: K,
+    value: SystemSettings[K]
+  ): void {
+
+    this.settings.update(current => ({
+      ...current,
+      [key]: value
+    }));
+
+    this.saved.set(false);
+    this.error.set('');
+
+    /*
+     * Apply theme immediately.
+     * User does NOT need to press Save
+     * just to see Dark/Light.
+     */
+    if (key === 'theme') {
+
+      this.applyTheme(
+        value as SystemSettings['theme']
+      );
+    }
+  }
+
+
+  /* ============================================================
+     APPLY THEME
+     ============================================================ */
+
+  private applyTheme(
+    theme: SystemSettings['theme']
+  ): void {
+
+    /*
+     * DARK
+     */
+    if (theme === 'dark') {
+
+      this.themeService.setDarkMode(
+        true
+      );
+
+      return;
+    }
+
+
+    /*
+     * LIGHT
+     */
+    if (theme === 'light') {
+
+      this.themeService.setDarkMode(
+        false
+      );
+
+      return;
+    }
+
+
+    /*
+     * SYSTEM DEFAULT
+     */
+    const prefersDark =
+      window.matchMedia(
+        '(prefers-color-scheme: dark)'
+      ).matches;
+
+    this.themeService.setDarkMode(
+      prefersDark
+    );
+  }
+
+
+  /* ============================================================
+     SAVE
+     ============================================================ */
+
+  save(): void {
+
+    if (this.saving()) {
+      return;
+    }
+
+    this.saving.set(true);
+    this.saved.set(false);
+    this.error.set('');
+
+
+    const currentSettings =
+      this.settings();
+
+
+    this.settingsService
+      .save<SystemSettings>(
+        'system',
+        currentSettings
+      )
+      .subscribe({
+
+        next: payload => {
+
+          const savedSettings: SystemSettings = {
+            ...DEFAULTS,
+            ...(payload?.values ?? currentSettings)
+          };
+
+          this.settings.set(
+            savedSettings
+          );
+
+          /*
+           * Make sure the selected theme
+           * is still applied after saving.
+           */
+          this.applyTheme(
+            savedSettings.theme
+          );
+
+          this.saving.set(false);
+          this.saved.set(true);
+
+
+          setTimeout(() => {
+
+            this.saved.set(false);
+
+          }, 2500);
+        },
+
+
+        error: error => {
+
+          console.error(
+            'Failed to save system settings:',
+            error
+          );
+
+          this.saving.set(false);
+
+          this.error.set(
+            'Failed to save system settings.'
+          );
+        }
+      });
+  }
+
+
+  /* ============================================================
+     RESET TO DEFAULTS
+     ============================================================ */
+
+  resetToDefaults(): void {
+
+    const defaults = {
+      ...DEFAULTS
+    };
+
+    this.settings.set(
+      defaults
+    );
+
+    /*
+     * Apply default theme immediately.
+     */
+    this.applyTheme(
+      defaults.theme
+    );
+
+    this.saved.set(false);
+    this.error.set('');
+  }
+
+
+  /* ============================================================
+     RESET DASHBOARD LAYOUT
+     ============================================================ */
+
+  resetDashboardLayout(): void {
+
+    /*
+     * This event is currently kept isolated
+     * because the dashboard does not yet expose
+     * a real persisted layout configuration.
+     *
+     * We don't pretend that a console.log is
+     * a real reset operation.
+     */
+
+    console.log(
+      '[AGDD] Dashboard layout reset requested.'
+    );
+  }
+}
+
+
+==================== FILE: C:\Users\LENOVO\Desktop\ICDTP SHAYMA GERMANY\agdd-frontend-angular-updated-2\agdd\frontend\src\app\features\settings\settings.component.ts ====================
+
+import { Component } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { RouterModule } from '@angular/router';
+import { MatIconModule } from '@angular/material/icon';
+
+interface SettingCard {
+  title: string;
+  icon: string;
+  description: string;
+  route: string;
+}
+
+@Component({
+  selector: 'app-settings',
+
+  standalone: true,
+
+  imports: [
+    CommonModule,
+    RouterModule,
+    MatIconModule
+  ],
+
+  templateUrl: './settings.component.html',
+
+  styleUrl: './settings.component.scss'
+})
+export class SettingsComponent {
+
+  settingCards: SettingCard[] = [
+
+    {
+      title: 'Camera Settings',
+      icon: 'photo_camera',
+      description:
+        'Zoom, frame size, brightness, contrast, resolution and frame rate for both cameras.',
+      route: '/settings/camera'
+    },
+
+    {
+      title: 'Robot Settings',
+      icon: 'precision_manufacturing',
+      description:
+        'Arm speed, grip force, safety zone and sorting mode.',
+      route: '/settings/robot'
+    },
+
+    {
+      title: 'AI Settings',
+      icon: 'smart_toy',
+      description:
+        'Detection confidence, model selection and auto-retraining.',
+      route: '/settings/ai'
+    },
+
+    {
+      title: 'System Settings',
+      icon: 'tune',
+      description:
+        'Language, session timeout, theme and notification preferences.',
+      route: '/settings/system'
+    }
+
+  ];
+
+}
+
+
+==================== FILE: C:\Users\LENOVO\Desktop\ICDTP SHAYMA GERMANY\agdd-frontend-angular-updated-2\agdd\frontend\src\app\features\users\users.component.ts ====================
+
+import { Component, OnInit, signal, computed, inject } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+
+import { MatTableModule } from '@angular/material/table';
+import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
+import { MatChipsModule } from '@angular/material/chips';
+import { MatDialogModule, MatDialog } from '@angular/material/dialog';
+import { MatMenuModule } from '@angular/material/menu';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatSelectModule } from '@angular/material/select';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { MatTooltipModule } from '@angular/material/tooltip';
+
+import { UserService } from '../../core/services/user.service';
+import { RoleService } from '../../core/services/role.service';
+import { User } from '../../core/models/user.model';
+import { Role } from '../../core/models/role.model';
+
+@Component({
+  selector: 'app-users',
+  standalone: true,
+  imports: [
+    CommonModule, ReactiveFormsModule,
+    MatTableModule, MatPaginatorModule, MatFormFieldModule, MatInputModule,
+    MatButtonModule, MatIconModule, MatChipsModule, MatDialogModule,
+    MatMenuModule, MatSnackBarModule, MatSelectModule, MatSlideToggleModule, MatTooltipModule
+  ],
+  templateUrl: './users.component.html',
+  styleUrl: './users.component.scss'
+})
+export class UsersComponent implements OnInit {
+  displayedColumns = ['firstName', 'lastName', 'username', 'email', 'role', 'status', 'actions'];
+
+  allUsers = signal<User[]>([]);
+  roles = signal<Role[]>([]);
+  searchTerm = signal('');
+
+  pageIndex = signal(0);
+  pageSize = signal(5);
+
+  showForm = signal(false);
+  editingUser = signal<User | null>(null);
+
+  filteredUsers = computed(() => {
+    const term = this.searchTerm().toLowerCase().trim();
+    const list = this.allUsers();
+    if (!term) return list;
+    return list.filter(u =>
+      u.firstName.toLowerCase().includes(term) ||
+      u.lastName.toLowerCase().includes(term) ||
+      u.username.toLowerCase().includes(term) ||
+      u.email.toLowerCase().includes(term)
+    );
+  });
+
+  pagedUsers = computed(() => {
+    const start = this.pageIndex() * this.pageSize();
+    return this.filteredUsers().slice(start, start + this.pageSize());
+  });
+
+  private fb = inject(FormBuilder);
+  private userService = inject(UserService);
+  private roleService = inject(RoleService);
+  private snackBar = inject(MatSnackBar);
+
+  form = this.fb.group({
+    firstName: ['', Validators.required],
+    lastName: ['', Validators.required],
+    username: ['', Validators.required],
+    email: ['', [Validators.required, Validators.email]],
+    password: [''],
+    role: ['', Validators.required],
+    enabled: [true],
+  });
+
+  ngOnInit(): void {
+    this.loadUsers();
+    this.loadRoles();
+  }
+
+  loadUsers(): void {
+    this.userService.getAll().subscribe({
+      next: (users) => this.allUsers.set(users),
+      error: () => this.snackBar.open('Error loading users', 'Close', { duration: 3000 })
+    });
+  }
+
+  loadRoles(): void {
+    this.roleService.getAll().subscribe({
+      next: (roles) => this.roles.set(roles),
+      error: () => {}
+    });
+  }
+
+  onSearchChange(value: string): void {
+    this.searchTerm.set(value);
+    this.pageIndex.set(0);
+  }
+
+  onPageChange(event: PageEvent): void {
+    this.pageIndex.set(event.pageIndex);
+    this.pageSize.set(event.pageSize);
+  }
+
+  openCreateForm(): void {
+    this.editingUser.set(null);
+    this.form.reset({ enabled: true });
+    this.form.get('password')?.setValidators([Validators.required]);
+    this.form.get('password')?.updateValueAndValidity();
+    this.showForm.set(true);
+  }
+
+  openEditForm(user: User): void {
+    this.editingUser.set(user);
+    this.form.reset({
+      firstName: user.firstName,
+      lastName: user.lastName,
+      username: user.username,
+      email: user.email,
+      password: '',
+      role: user.role,
+      enabled: user.enabled,
+    });
+    this.form.get('password')?.clearValidators();
+    this.form.get('password')?.updateValueAndValidity();
+    this.showForm.set(true);
+  }
+
+  closeForm(): void {
+    this.showForm.set(false);
+    this.editingUser.set(null);
+  }
+
+  saveUser(): void {
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    const raw = this.form.getRawValue();
+    const editing = this.editingUser();
+
+    if (editing) {
+      this.userService.update(editing.id, {
+        firstName: raw.firstName!, lastName: raw.lastName!, username: raw.username!,
+        email: raw.email!, password: raw.password || undefined, enabled: raw.enabled!,
+        role: raw.role!
+      }).subscribe({
+        next: () => {
+          this.snackBar.open('User updated', 'Close', { duration: 2500 });
+          this.closeForm();
+          this.loadUsers();
+        },
+        error: (err) => this.snackBar.open(err?.error?.message ?? 'Error updating user', 'Close', { duration: 3000 })
+      });
+    } else {
+      this.userService.create({
+        firstName: raw.firstName!, lastName: raw.lastName!, username: raw.username!,
+        email: raw.email!, password: raw.password!, enabled: raw.enabled!, role: raw.role!
+      }).subscribe({
+        next: () => {
+          this.snackBar.open('User created', 'Close', { duration: 2500 });
+          this.closeForm();
+          this.loadUsers();
+        },
+        error: (err) => this.snackBar.open(err?.error?.message ?? 'Error creating user', 'Close', { duration: 3000 })
+      });
+    }
+  }
+
+  deleteUser(user: User): void {
+    if (!confirm(`Delete user "${user.username}"?`)) return;
+
+    this.userService.delete(user.id).subscribe({
+      next: () => {
+        this.snackBar.open('User deleted', 'Close', { duration: 2500 });
+        this.loadUsers();
+      },
+      error: () => this.snackBar.open('Error deleting user', 'Close', { duration: 3000 })
+    });
+  }
+}
+
